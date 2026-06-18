@@ -1,9 +1,28 @@
 import { useState } from "react";
 
-export default function ValidationTable({ rows, headers, aiSuggestions }) {
+export default function ValidationTable({ rows, headers, aiFixes, onCellUpdate }) {
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(0);
+  const [editingCell, setEditingCell] = useState(null);
+  const [editValue, setEditValue] = useState("");
   const PAGE_SIZE = 20;
+
+  const handleEditClick = (rowId, header, currentVal) => {
+    setEditingCell({ rowId, header });
+    setEditValue(currentVal || "");
+  };
+
+  const handleEditSave = () => {
+    if (editingCell && onCellUpdate) {
+      onCellUpdate(editingCell.rowId, editingCell.header, editValue);
+    }
+    setEditingCell(null);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") handleEditSave();
+    if (e.key === "Escape") setEditingCell(null);
+  };
 
   const filtered = rows.filter((r) => {
     if (filter === "valid") return r._errors.length === 0;
@@ -47,33 +66,62 @@ export default function ValidationTable({ rows, headers, aiSuggestions }) {
             {paginated.map((row) => {
               const hasError = row._errors.length > 0;
               const errorFields = row._errors.map((e) => e.field);
-              const suggestions = aiSuggestions[row._id];
               return (
                 <tr key={row._id} className={hasError ? "row-error" : "row-ok"}>
                   <td className="row-num">{row._id + 1}</td>
-                  {headers.map((h) => (
-                    <td key={h} className={errorFields.includes(h) ? "cell-error" : ""}>
-                      {row[h] || <span className="empty-cell">—</span>}
-                    </td>
-                  ))}
+                  {headers.map((h) => {
+                    const isEditing = editingCell?.rowId === row._id && editingCell?.header === h;
+                    return (
+                      <td 
+                        key={h} 
+                        className={`${errorFields.includes(h) ? "cell-error" : ""} ${isEditing ? "cell-editing" : "cell-editable"}`}
+                        onClick={() => !isEditing && handleEditClick(row._id, h, row[h])}
+                        title="Click to edit"
+                      >
+                        {isEditing ? (
+                          <input
+                            autoFocus
+                            className="inline-edit-input"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={handleEditSave}
+                            onKeyDown={handleKeyDown}
+                          />
+                        ) : (
+                          row[h] || <span className="empty-cell">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
                   <td>
                     {hasError
                       ? <span className="badge-status error">✗ {row._errors.length} error{row._errors.length > 1 ? "s" : ""}</span>
                       : <span className="badge-status ok">✓ Valid</span>
                     }
                     {row._fixed && <span className="badge-fixed">auto-fixed</span>}
+                    {row._manuallyFixed && <span className="badge-fixed" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>manually-edited</span>}
                   </td>
                   <td className="issues-cell">
-                    {row._errors.map((e, i) => (
-                      <div key={i} className="issue-item">
-                        <span className="issue-field">{e.field}:</span> {e.message}
-                        {suggestions && suggestions[e.field] && (
-                          <div className="ai-suggestion">
-                            🤖 {suggestions[e.field]}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                    <div className="issue-inline-list">
+                      {row._errors.map((e, i) => (
+                        <div key={i} style={{ display: 'inline-block', marginBottom: '2px', marginRight: '8px' }}>
+                          <span className="issue-badge">{e.field}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-2)', marginLeft: '4px' }}>{e.message}</span>
+                          {aiFixes && aiFixes[`${e.field}::${row[e.field]}`] && aiFixes[`${e.field}::${row[e.field]}`] !== row[e.field] && (
+                            <span className="ai-suggestion" style={{ display: 'inline-block', marginLeft: '6px', marginTop: 0, padding: '2px 6px' }}>
+                              <span style={{ fontWeight: 600, marginRight: '4px' }}>AI Predicts:</span> {aiFixes[`${e.field}::${row[e.field]}`]}
+                              <button 
+                                className="btn-magic" 
+                                onClick={() => onCellUpdate && onCellUpdate(row._id, e.field, aiFixes[`${e.field}::${row[e.field]}`], "AI Magic Fix")}
+                                style={{ marginLeft: '6px', padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #14b8a6', background: '#f0fdfa', color: '#0f766e', cursor: 'pointer', fontWeight: 600 }}
+                              >
+                                ✨ Apply Fix
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               );

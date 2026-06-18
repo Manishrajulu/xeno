@@ -16,11 +16,9 @@ export default function Dashboard({ total, valid, invalid, totalErrors, headers,
   return (
     <div className="dashboard">
       {aiInsight && (
-        <div className="ai-insight-panel" style={{ backgroundColor: "#f0fdfa", padding: "15px", borderRadius: "8px", border: "1px solid #ccfbf1", marginBottom: "20px" }}>
-          <h4 style={{ margin: "0 0 5px 0", color: "#0f766e", display: "flex", alignItems: "center", gap: "8px" }}>
-            <span>🤖</span> AI Dataset Insights
-          </h4>
-          <p style={{ margin: 0, color: "#115e59", fontSize: "14px", lineHeight: "1.5" }}>{aiInsight}</p>
+        <div className="ai-insight-panel">
+          <h4>AI Dataset Insights</h4>
+          <p>{aiInsight}</p>
         </div>
       )}
       <div className="stats-row">
@@ -40,10 +38,10 @@ export default function Dashboard({ total, valid, invalid, totalErrors, headers,
           <span className="stat-label">Health score</span>
           <span className="stat-value">
             {initialStats && initialStats.score !== healthScore ? (
-              <>
-                <span style={{ textDecoration: "line-through", opacity: 0.5, fontSize: "0.7em", marginRight: "8px" }}>{initialStats.score}%</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: "#999999", fontSize: "0.6em", fontWeight: 500 }}>{initialStats.score}% →</span>
                 <span>{healthScore}%</span>
-              </>
+              </span>
             ) : (
               <span>{healthScore}%</span>
             )}
@@ -61,11 +59,11 @@ export default function Dashboard({ total, valid, invalid, totalErrors, headers,
             <p className="chart-title">Row quality</p>
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value">
-                  <Cell fill="#22c55e" />
-                  <Cell fill="#ef4444" />
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} dataKey="value" stroke="none">
+                  <Cell fill="#0ea5e9" />
+                  <Cell fill="#f43f5e" />
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={{ borderRadius: '4px', border: '1px solid #eaeaea', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="legend">
@@ -79,11 +77,11 @@ export default function Dashboard({ total, valid, invalid, totalErrors, headers,
               <p className="chart-title">Errors by column</p>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={fieldErrorCounts} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="errors" fill="#f97316" radius={[3, 3, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eaeaea" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#666666' }} axisLine={{ stroke: '#eaeaea' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#666666' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: '4px', border: '1px solid #eaeaea', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }} />
+                  <Bar dataKey="errors" fill="#0ea5e9" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

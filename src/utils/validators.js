@@ -114,7 +114,11 @@ export function autoFixRow(row, headers) {
     if (type === "date" && val) {
       const trimmed = val.trim();
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
-        const [d, m, y] = trimmed.split("/");
+        const [p1, p2, y] = trimmed.split("/");
+        let d = p1, m = p2;
+        if (parseInt(p2, 10) > 12) {
+          m = p1; d = p2; // It was MM/DD/YYYY
+        }
         row[header] = `${y}-${m}-${d}`;
       }
     }

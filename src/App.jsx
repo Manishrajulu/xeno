@@ -4,7 +4,9 @@ import Upload from "./components/Upload";
 import Dashboard from "./components/Dashboard";
 import ValidationTable from "./components/ValidationTable";
 import ActionBar from "./components/ActionBar";
+import AuditLogModal from "./components/AuditLogModal";
 import { validateRow, autoFixRow, guessFieldType } from "./utils/validators";
+import "./modal.css";
 
 export default function App() {
   const [raw, setRaw] = useState([]);
@@ -13,8 +15,9 @@ export default function App() {
   const [stage, setStage] = useState("upload"); // upload | analyzing | results
   const [analyzingStage, setAnalyzingStage] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState({});
+  const [aiFixes, setAiFixes] = useState(null);
   const [aiInsight, setAiInsight] = useState("");
+  const [showAuditLog, setShowAuditLog] = useState(false);
   const [auditLog, setAuditLog] = useState([]);
   const [initialStats, setInitialStats] = useState(null);
 
@@ -28,23 +31,46 @@ export default function App() {
         let hdrs = result.meta.fields || [];
         let rawData = result.data;
         
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
+        const apiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
         if (apiKey) {
            try {
-             const prompt = `Map these raw CSV headers to a standard schema if possible. 
-             Standard headers: Phone, Email, Date, Amount, Payment Mode, Country.
-             Raw headers: ${JSON.stringify(hdrs)}.
-             Return ONLY a JSON object mapping raw to standard: {"raw_header": "Standard Header"}. Keep original if no match. No markdown.`;
-             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
-               method: "POST", headers: { "Content-Type": "application/json" },
-               body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+             const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+               method: "POST", headers: { 
+                 "Authorization": `Bearer ${apiKey}`,
+                 "Content-Type": "application/json" 
+               },
+               body: JSON.stringify({
+                 model: "llama-3.1-8b-instant",
+                 response_format: { type: "json_object" },
+                 messages: [
+                   { role: "system", content: "You are a data validation assistant. Respond ONLY with a valid JSON object mapping raw to standard. Example: {\"raw_header\": \"Standard Header\"}. Keep original if no match. Always start with { and end with }." },
+                   { role: "user", content: `Map these raw CSV headers to a standard schema if possible.\nStandard headers: Phone, Email, Date, Amount, Payment Mode, Country.\nRaw headers: ${JSON.stringify(hdrs)}.` }
+                 ]
+               }),
              });
+             if (!res.ok) {
+                const errData = await res.json().catch(()=>({}));
+                console.error("Groq Header Map Error:", errData);
+                throw new Error(errData.error?.message || "Status " + res.status);
+             }
              const data = await res.json();
-             const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+             const text = data?.choices?.[0]?.message?.content || "{}";
              const clean = text.replace(/```json|```/g, "").trim();
              const mapping = JSON.parse(clean);
              
-             hdrs = hdrs.map(h => mapping[h] || h);
+             const usedHeaders = new Set();
+             hdrs = hdrs.map(h => {
+                 let mapped = mapping[h] || h;
+                 let finalName = mapped;
+                 let i = 1;
+                 while (usedHeaders.has(finalName)) {
+                     finalName = `${mapped} (${i})`;
+                     i++;
+                 }
+                 usedHeaders.add(finalName);
+                 mapping[h] = finalName; // update mapping so row data matches!
+                 return finalName;
+             });
              rawData = rawData.map(row => {
                const newRow = {};
                for (const key in row) {
@@ -90,20 +116,31 @@ export default function App() {
         setRows(validated);
 
         if (apiKey) {
-           setAnalyzingStage("Generating AI Insights...");
            try {
-             const statsStr = `Total: ${total}, Valid: ${validCount}, Invalid: ${total - validCount}. Errors: ${JSON.stringify(validated.flatMap(r=>r._errors.map(e=>e.field)).reduce((acc, f) => { acc[f]=(acc[f]||0)+1; return acc; }, {}))}`;
-             const prompt = `You are a data analyst. Give a 2-3 sentence high-level business insight summary of this dataset's health based on these stats: ${statsStr}. Focus on the biggest issues. No markdown formatting.`;
-             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
-               method: "POST", headers: { "Content-Type": "application/json" },
-               body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+             setAiInsight("Generating AI insight...");
+             const uniqueErrors = Array.from(new Set(validated.flatMap(r => r._errors.map(e => e.message))));
+             const insightPrompt = `Analyze this dataset health. Total rows: ${total}, Valid: ${validCount}, Invalid: ${total - validCount}. Error types found: ${uniqueErrors.join(", ")}. Give a strictly 2-sentence summary of the dataset quality and what needs the most attention. Do not give any introduction.`;
+             const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+               method: "POST", headers: { 
+                 "Authorization": `Bearer ${apiKey}`,
+                 "Content-Type": "application/json" 
+               },
+               body: JSON.stringify({
+                 model: "llama-3.1-8b-instant",
+                 messages: [{ role: "user", content: insightPrompt }]
+               })
              });
              const data = await res.json();
-             const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-             setAiInsight(text.trim());
-           } catch(e) {}
+             if (data.choices && data.choices.length > 0) {
+               setAiInsight(data.choices[0].message.content.trim());
+             } else {
+               setAiInsight("Unable to generate insight at this time.");
+             }
+           } catch(e) {
+             console.error("AI Insight failed", e);
+             setAiInsight("AI insight generation failed.");
+           }
         }
-        
         setStage("results");
       },
     });
@@ -111,74 +148,137 @@ export default function App() {
 
   const handleAutoFix = () => {
     const newLogs = [];
-    setRows((prev) =>
-      prev.map((row) => {
-        const originalRow = { ...row };
-        const fixed = autoFixRow({ ...row }, headers);
-        
-        headers.forEach(h => {
-          if (originalRow[h] !== fixed[h]) {
-            newLogs.push({
-              row: originalRow._id + 1,
-              field: h,
-              from: originalRow[h] || "empty",
-              to: fixed[h],
-              reason: "Auto-Fix",
-            });
-          }
-        });
-
-        return { ...fixed, _errors: validateRow(fixed, headers), _fixed: true };
-      })
-    );
+    const newRows = rows.map((row) => {
+      const originalRow = { ...row };
+      const fixed = autoFixRow({ ...row }, headers);
+      let wasModified = false;
+      
+      headers.forEach(h => {
+        if (originalRow[h] !== fixed[h]) {
+          wasModified = true;
+          newLogs.push({
+            row: originalRow._id + 1,
+            field: h,
+            from: originalRow[h] || "empty",
+            to: fixed[h],
+            reason: "Auto-Fix"
+          });
+        }
+      });
+      
+      return { ...fixed, _errors: validateRow(fixed, headers), _fixed: wasModified || row._fixed };
+    });
+    
+    setRows(newRows);
     if (newLogs.length > 0) {
       setAuditLog(prev => [...prev, ...newLogs]);
     }
   };
 
-  const handleAISuggest = async () => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
-    if (!apiKey) return alert("Please set VITE_GEMINI_API_KEY in your .env file.");
-    const errorRows = rows.filter((r) => r._errors.length > 0).slice(0, 5);
-    if (!errorRows.length) return alert("No errors found to suggest fixes for!");
-    setAiLoading(true);
-    let suggestions = {};
-    try {
-      const payloadData = errorRows.map(row => ({
-        id: row._id,
-        errors: row._errors,
-        data: Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith("_")))
-      }));
-      const prompt = `You are a data validation assistant. Here are ${payloadData.length} CSV rows with errors:
-${JSON.stringify(payloadData)}
-Suggest a short fix for each error in plain English. 
-Respond ONLY with a single JSON object mapping the row ID to an object of field_name and suggested fixes.
-Format exactly like this: {"row_id_1": {"field_name": "suggested fix"}, "row_id_2": {"field_name": "suggested fix"}}. 
-No markdown formatting, no explanations, just the JSON.`;
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-        }
-      );
-      if (!res.ok) {
-         if (res.status === 429) throw new Error("Rate limit exceeded. Please wait a minute before trying again.");
-         if (res.status === 503) throw new Error("Google AI servers are currently overloaded. Please try again later.");
-         throw new Error("API request failed with status " + res.status);
+  const handleCellUpdate = (rowId, header, newValue, customReason = "Manual Edit") => {
+    let logEntry = null;
+    const newRows = rows.map(row => {
+      if (row._id === rowId) {
+        const oldVal = row[header];
+        if (oldVal === newValue) return row; // No change
+        
+        const updatedRow = { ...row, [header]: newValue, _manuallyFixed: true };
+        updatedRow._errors = validateRow(updatedRow, headers);
+        
+        logEntry = {
+          row: rowId + 1,
+          field: header,
+          from: oldVal || "empty",
+          to: newValue,
+          reason: customReason,
+          timestamp: new Date().toLocaleTimeString()
+        };
+        
+        return updatedRow;
       }
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-      const clean = text.replace(/```json|```/g, "").trim();
-      suggestions = JSON.parse(clean);
+      return row;
+    });
+
+    if (logEntry) {
+      setRows(newRows);
+      setAuditLog(prev => [...prev, logEntry]);
+    }
+  };
+
+  const handleAIFixes = async () => {
+    const apiKey = import.meta.env.VITE_GROQ_API_KEY?.trim();
+    if (!apiKey) return alert("Please set VITE_GROQ_API_KEY in your .env file.");
+    
+    const badValuesMap = new Map();
+    rows.forEach(r => {
+      r._errors.forEach(e => {
+        const val = r[e.field];
+        if (val !== undefined && val !== null) {
+          const id = `${e.field}::${val}`;
+          if (!badValuesMap.has(id)) {
+            badValuesMap.set(id, { id, value: val, field: e.field, error: e.message });
+          }
+        }
+      });
+    });
+
+    const badValues = Array.from(badValuesMap.values());
+    if (!badValues.length) return alert("No correctable errors found!");
+    setAiLoading(true);
+    let allFixes = {};
+    try {
+      const chunks = [];
+      for (let i = 0; i < badValues.length; i += 15) {
+        chunks.push(badValues.slice(i, i + 15));
+      }
+
+      const promises = chunks.map(async (chunk) => {
+        try {
+          const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: { 
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json" 
+            },
+            body: JSON.stringify({
+              model: "llama-3.3-70b-versatile",
+              response_format: { type: "json_object" },
+              messages: [
+                {
+                  role: "system",
+                  content: "You are an automated data repair bot. Given a list of bad data values and their error context, predict the correct formatting. Return ONLY a valid JSON object mapping the exact 'id' string to the corrected value string. If a value cannot be confidently fixed, map it to null. Example: {\"email::john.doe\": \"john.doe@example.com\"}. Always start with { and end with }."
+                },
+                {
+                  role: "user",
+                  content: `Fix these bad values:\n${JSON.stringify(chunk)}\nFormat exactly as a single JSON object mapping "id" to the predicted string.`
+                }
+              ]
+            }),
+          });
+          if (!res.ok) {
+             const errData = await res.json().catch(()=>({}));
+             console.error("Groq Suggest Error for chunk:", errData);
+             return {}; // Skip this chunk on error
+          }
+          const data = await res.json();
+          const text = data?.choices?.[0]?.message?.content || "{}";
+          const clean = text.replace(/```json|```/g, "").trim();
+          return JSON.parse(clean);
+        } catch (e) {
+          console.error("Chunk processing failed", e);
+          return {};
+        }
+      });
+
+      const results = await Promise.all(promises);
+      results.forEach(fixes => {
+        allFixes = { ...allFixes, ...fixes };
+      });
     } catch (err) {
       console.error(err);
-      alert(err.message || "Failed to fetch AI suggestions.");
-      errorRows.forEach(row => { suggestions[row._id] = { error: "Could not fetch suggestion" }; });
+      alert(err.message || "Failed to fetch AI fixes.");
     }
-    setAiSuggestions(suggestions);
+    setAiFixes(allFixes);
     setAiLoading(false);
   };
 
@@ -227,6 +327,7 @@ No markdown formatting, no explanations, just the JSON.`;
     setRaw([]); setHeaders([]); setRows([]);
     setAiSuggestions({}); setStage("upload");
     setAuditLog([]); setInitialStats(null); setAiInsight("");
+    setShowAuditLog(false);
   };
 
   const totalErrors = rows.reduce((s, r) => s + r._errors.length, 0);
@@ -270,21 +371,30 @@ No markdown formatting, no explanations, just the JSON.`;
             />
             <ActionBar
               onAutoFix={handleAutoFix}
-              onAISuggest={handleAISuggest}
+              onAISuggest={handleAIFixes}
               onDownload={handleDownload}
               onSplitDownload={handleSplitDownload}
               onDownloadAudit={handleDownloadAudit}
+              onViewAudit={() => setShowAuditLog(true)}
               aiLoading={aiLoading}
               totalErrors={totalErrors}
             />
             <ValidationTable
               rows={rows}
               headers={headers}
-              aiSuggestions={aiSuggestions}
+              aiFixes={aiFixes}
+              onCellUpdate={handleCellUpdate}
             />
           </>
         )}
       </main>
+
+      {showAuditLog && (
+        <AuditLogModal 
+          auditLog={auditLog} 
+          onClose={() => setShowAuditLog(false)} 
+        />
+      )}
     </div>
   );
 }

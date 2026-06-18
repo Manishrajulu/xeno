@@ -29,14 +29,6 @@ export default function Upload({ onFile }) {
           onChange={(e) => handle(e.target.files[0])}
         />
       </div>
-      <div className="upload-features">
-        <div className="feat"><span>📞</span><span>Phone validation (IN, SG, US, UK)</span></div>
-        <div className="feat"><span>📅</span><span>Date & time format checks</span></div>
-        <div className="feat"><span>✉️</span><span>Email integrity validation</span></div>
-        <div className="feat"><span>🤖</span><span>AI-powered fix suggestions</span></div>
-        <div className="feat"><span>🔧</span><span>One-click auto-fix</span></div>
-        <div className="feat"><span>✂️</span><span>Smart CSV splitting</span></div>
-      </div>
     </div>
   );
 }
