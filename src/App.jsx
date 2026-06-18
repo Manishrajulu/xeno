@@ -340,7 +340,7 @@ export default function App() {
         <div className="header-inner">
           <div className="logo">
             <span className="logo-icon">⬡</span>
-            <span className="logo-text">DataGuard</span>
+            <span className="logo-text">Xeno Data Validator</span>
             <span className="logo-tag">by Xeno</span>
           </div>
           {stage === "results" && (
