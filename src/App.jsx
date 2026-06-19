@@ -182,7 +182,7 @@ export default function App() {
         const oldVal = row[header];
         if (oldVal === newValue) return row; // No change
         
-        const updatedRow = { ...row, [header]: newValue, _manuallyFixed: true };
+        const updatedRow = { ...row, [header]: newValue, _editReason: customReason };
         updatedRow._errors = validateRow(updatedRow, headers);
         
         logEntry = {

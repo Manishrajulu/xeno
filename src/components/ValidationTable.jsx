@@ -99,7 +99,7 @@ export default function ValidationTable({ rows, headers, aiFixes, onCellUpdate }
                       : <span className="badge-status ok">✓ Valid</span>
                     }
                     {row._fixed && <span className="badge-fixed">auto-fixed</span>}
-                    {row._manuallyFixed && <span className="badge-fixed" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>manually-edited</span>}
+                    {row._editReason && <span className="badge-fixed" style={row._editReason === "AI Fix" ? { borderColor: '#14b8a6', color: '#0f766e', background: '#f0fdfa' } : { borderColor: 'var(--primary)', color: 'var(--primary)' }}>{row._editReason === "AI Fix" ? "ai-fixed" : "manually-edited"}</span>}
                   </td>
                   <td className="issues-cell">
                     <div className="issue-inline-list">
@@ -112,7 +112,7 @@ export default function ValidationTable({ rows, headers, aiFixes, onCellUpdate }
                               <span style={{ fontWeight: 600, marginRight: '4px' }}>AI Predicts:</span> {aiFixes[`${e.field}::${row[e.field]}`]}
                               <button 
                                 className="btn-magic" 
-                                onClick={() => onCellUpdate && onCellUpdate(row._id, e.field, aiFixes[`${e.field}::${row[e.field]}`], "AI Magic Fix")}
+                                onClick={() => onCellUpdate && onCellUpdate(row._id, e.field, aiFixes[`${e.field}::${row[e.field]}`], "AI Fix")}
                                 style={{ marginLeft: '6px', padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #14b8a6', background: '#f0fdfa', color: '#0f766e', cursor: 'pointer', fontWeight: 600 }}
                               >
                                 ✨ Apply Fix
