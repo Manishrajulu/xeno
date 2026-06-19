@@ -303,10 +303,18 @@ export default function App() {
   const handleSplitDownload = () => {
     const clean = rows.map((row) => {
       const r = { ...row };
-      delete r._id; delete r._errors; delete r._fixed;
+      delete r._id; delete r._errors; delete r._fixed; delete r._editReason;
       return r;
     });
-    const chunkSize = 100;
+
+    let chunkSize = 100;
+    if (clean.length === 0) return;
+    if (clean.length < 100) {
+      chunkSize = clean.length;
+    } else if (clean.length > 1000) {
+      chunkSize = Math.ceil(clean.length / 10);
+    }
+
     for (let i = 0; i < clean.length; i += chunkSize) {
       const chunk = clean.slice(i, i + chunkSize);
       const csv = Papa.unparse(chunk);

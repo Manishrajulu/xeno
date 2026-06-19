@@ -115,7 +115,7 @@ export default function ValidationTable({ rows, headers, aiFixes, onCellUpdate }
                                 onClick={() => onCellUpdate && onCellUpdate(row._id, e.field, aiFixes[`${e.field}::${row[e.field]}`], "AI Fix")}
                                 style={{ marginLeft: '6px', padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #14b8a6', background: '#f0fdfa', color: '#0f766e', cursor: 'pointer', fontWeight: 600 }}
                               >
-                                ✨ Apply Fix
+                                 Apply Fix
                               </button>
                             </span>
                           )}

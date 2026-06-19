@@ -16,8 +16,8 @@ export default function ActionBar({ onAutoFix, onAISuggest, onDownload, onSplitD
         <button className="btn btn-download" onClick={onDownload}>
           Download cleaned CSV
         </button>
-        <button className="btn btn-split" onClick={onSplitDownload}>
-          Split & download (100 rows/file)
+        <button className="btn btn-split" onClick={onSplitDownload} title="Automatically scales chunk size based on total rows">
+          Smart Split & Download
         </button>
       </div>
     </div>
