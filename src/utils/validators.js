@@ -1,26 +1,31 @@
-const COUNTRY_PHONE_RULES = {
-  IN: { digits: 10, label: "India" },
-  SG: { digits: 8, label: "Singapore" },
-  US: { digits: 10, label: "USA" },
-  GB: { digits: 10, label: "UK" },
-};
+import { isValidPhoneNumber } from 'libphonenumber-js';
 
-function detectCountry(phone) {
-  const clean = phone.replace(/[\s\-\(\)\+]/g, "");
-  if (clean.startsWith("91") && clean.length === 12) return "IN";
-  if (clean.startsWith("65") && clean.length === 10) return "SG";
-  if (clean.startsWith("1") && clean.length === 11) return "US";
-  if (clean.length === 10) return "IN";
-  if (clean.length === 8) return "SG";
-  return null;
+function resolveCountryCode(c) {
+  if (!c) return 'IN';
+  const str = String(c).trim().toUpperCase();
+  if (str === 'INDIA' || str === 'IN' || str.includes('ORD')) return 'IN'; // Assuming ORD rows in sample might default to IN
+  if (str === 'SINGAPORE' || str === 'SG') return 'SG';
+  if (str === 'USA' || str === 'US' || str === 'UNITED STATES') return 'US';
+  if (str === 'UK' || str === 'GB' || str === 'UNITED KINGDOM') return 'GB';
+  if (str === 'AUSTRALIA' || str === 'AU') return 'AU';
+  if (str === 'CANADA' || str === 'CA') return 'CA';
+  return 'IN';
 }
 
-function validatePhone(val) {
+function validatePhone(val, countryStr) {
   if (!val) return "Phone number is missing";
   const clean = val.replace(/[\s\-\(\)\+]/g, "");
   if (!/^\d+$/.test(clean)) return `Phone contains non-numeric characters`;
-  const country = detectCountry(val);
-  if (!country) return `Phone length ${clean.length} doesn't match any known country format`;
+  
+  const isoCode = resolveCountryCode(countryStr);
+  
+  try {
+    if (!isValidPhoneNumber(val.trim(), isoCode)) {
+      return `Invalid global phone number format for country: ${isoCode}`;
+    }
+  } catch (err) {
+    return `Invalid global phone number format for country: ${isoCode}`;
+  }
   return null;
 }
 
@@ -86,13 +91,14 @@ export function validateRow(row, headers) {
     const val = row[header];
     const type = guessFieldType(header);
     let err = null;
-    if (type === "phone") err = validatePhone(val);
+    const countryHeader = headers.find((h) => h.toLowerCase().includes("country"));
+    const countryVal = countryHeader ? row[countryHeader] : null;
+
+    if (type === "phone") err = validatePhone(val, countryVal);
     else if (type === "email") err = validateEmail(val);
     else if (type === "date") err = validateDate(val);
     else if (type === "amount") err = validateAmount(val);
     else if (type === "payment") {
-      const countryHeader = headers.find((h) => h.toLowerCase().includes("country"));
-      const countryVal = countryHeader ? row[countryHeader] : null;
       err = validatePaymentMode(val, countryVal);
     }
     else if (!val || String(val).trim() === "") err = `${header} is empty`;
