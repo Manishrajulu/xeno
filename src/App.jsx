@@ -212,6 +212,11 @@ export default function App() {
     const badValuesMap = new Map();
     rows.forEach(r => {
       r._errors.forEach(e => {
+        // Hard Filter: Do not allow AI to guess/fix phone numbers or financial amounts
+        if (e.field.toLowerCase().includes("phone") || e.field.toLowerCase().includes("amount")) {
+          return;
+        }
+
         const val = r[e.field];
         if (val !== undefined && val !== null) {
           const id = `${e.field}::${val}`;
