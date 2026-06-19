@@ -58,15 +58,15 @@ function validateAmount(val) {
 
 function validatePaymentMode(val, country) {
   if (!val) return "Payment mode is missing";
-  const modes = ["UPI", "CREDIT CARD", "DEBIT CARD", "NET BANKING", "PAYNOW", "PAYPAL", "CASH", "BANK TRANSFER"];
+  const modes = ["UPI", "CREDIT CARD", "DEBIT CARD", "CARD", "NET BANKING", "PAYNOW", "PAYPAL", "CASH", "BANK TRANSFER"];
   const mode = String(val).trim().toUpperCase();
   if (!modes.includes(mode)) {
-    return `Invalid payment mode "${val}". Accepted: UPI, Credit Card, Debit Card, Net Banking, PayNow, PayPal, Cash, Bank Transfer.`;
+    return `Invalid payment mode "${val}". Accepted: UPI, Credit Card, Debit Card, Card, Net Banking, PayNow, PayPal, Cash, Bank Transfer.`;
   }
   if (country) {
     const c = String(country).trim().toUpperCase();
-    if (c === "SG" && mode !== "PAYNOW" && mode !== "CREDIT CARD") {
-      return `Payment mode "${val}" is not allowed for SG. Only PayNow and Credit Card are accepted.`;
+    if (c === "SG" && mode !== "PAYNOW" && mode !== "CREDIT CARD" && mode !== "CARD") {
+      return `Payment mode "${val}" is not allowed for SG. Only PayNow, Credit Card, and Card are accepted.`;
     }
     if (c === "IN" && mode === "PAYNOW") {
       return `Payment mode "${val}" is not allowed for IN. PayNow is invalid.`;
